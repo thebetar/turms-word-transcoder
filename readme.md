@@ -16,9 +16,9 @@ All of this lives in [`internal/transcoder/transcoder.go`](internal/transcoder/t
 
 ## Data
 
-Fitting the name, the example corpora in `data/` are Etruscan. No Etruscan myths survive in the Etruscan language itself: what is left is mostly short inscriptions, and their religious books (the _Etrusca Disciplina_) are lost. So there are two corpora:
+Fitting the name, the example corpora in `data/` are Etruscan texts in English. No Etruscan myths survive in the Etruscan language itself: what is left is mostly short inscriptions, and their religious books (the _Etrusca Disciplina_) are lost. So there are two corpora:
 
-- [`data/liber-linteus.txt`](data/liber-linteus.txt): the [Liber Linteus](https://en.wikipedia.org/wiki/Liber_Linteus), the longest surviving Etruscan text. It is a ritual calendar of offerings to the gods, written on linen that was later cut into strips to wrap an Egyptian mummy. Etruscan can be read but is still largely untranslated, so the transcoder handles words nobody fully understands. The transliteration comes from the column-by-column excerpts on the [Wikipedia talk page](https://en.wikipedia.org/wiki/Talk:Liber_Linteus), with the interpuncts between words replaced by spaces and the editorial gap markers removed. It holds about 1,100 of the roughly 1,330 legible words.
+- [`data/liber-linteus.txt`](data/liber-linteus.txt): the [Liber Linteus](https://en.wikipedia.org/wiki/Liber_Linteus), the longest surviving Etruscan text. It is a ritual calendar of offerings to the gods, written on linen that was later cut into strips to wrap an Egyptian mummy. Etruscan is still only partly understood, so no full translation exists. This file collects the tentative English translations of the passages that have one, taken from the column-by-column notes on the [Wikipedia talk page](https://en.wikipedia.org/wiki/Talk:Liber_Linteus) (based on L. B. van der Meer's 2007 edition, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)). The Etruscan glosses and uncertain alternatives were removed, and words nobody can translate yet, such as `zarfneθ` or `cletram`, stay in Etruscan.
 - [`data/tages.txt`](data/tages.txt): the myth of Tages, the child prophet who rose from a ploughed field and taught the Etruscans divination, as told by Roman writers in public domain English translations: Cicero, _On Divination_ 2.50 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/2*.html)) and Ovid, _Metamorphoses_ 15 ([Garth, Dryden et al., 1727](https://en.wikisource.org/wiki/Metamorphoses_(tr._Garth,_Dryden,_et_al.)/Book_XV)).
 
 ## Usage
@@ -27,16 +27,16 @@ Fitting the name, the example corpora in `data/` are Etruscan. No Etruscan myths
 make build
 
 # Build a vocabulary from the Liber Linteus
-./bin/turms-word-transcoder build data/liber-linteus.txt etruscan.json
-# saved 522 words to etruscan.json
+./bin/turms-word-transcoder build data/liber-linteus.txt linteus.json
+# saved 302 words to linteus.json
 
-# Text to IDs: the repeated lament from column 7
-./bin/turms-word-transcoder encode etruscan.json "male ceia hia etnam ciz vacl aisvale"
-# 84 200 201 61 202 73 204
+# Text to IDs
+./bin/turms-word-transcoder encode linteus.json "Pour a libation of new wine to Neptune."
+# 168 64 38 79 69 57 20 150 12
 
 # IDs back to text
-./bin/turms-word-transcoder decode etruscan.json 84 200 201 61 202 73 204
-# male ceia hia etnam ciz vacl aisvale
+./bin/turms-word-transcoder decode linteus.json 168 64 38 79 69 57 20 150 12
+# pour a libation of new wine to neptune.
 
 # Build a vocabulary from the Tages myth and try words that are not in it
 ./bin/turms-word-transcoder build data/tages.txt tages.json
@@ -49,7 +49,7 @@ make build
 # a boy sprang from the ploughed field and taught the etruscans to <unk> the <unk>.
 ```
 
-The unknown words show the main weakness of a word-level transcoder: `gods` is unknown even though `god` might be in a bigger corpus, because every form of a word needs its own ID. Etruscan makes this even clearer, as it adds endings to words: the Liber Linteus has both `tinś` and `tinśi`, which get two unrelated IDs. Subword tokenizers such as byte pair encoding split words into smaller pieces to solve this.
+The unknown words show the main weakness of a word-level transcoder: `gods` is unknown even though `god` might be in a bigger corpus, because every form of a word needs its own ID. Subword tokenizers such as byte pair encoding split words into smaller pieces to solve this.
 
 Useful make targets:
 
