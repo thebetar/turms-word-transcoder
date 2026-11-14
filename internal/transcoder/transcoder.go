@@ -45,10 +45,11 @@ func (t *Transcoder) step(word, next int, rate float64) float64 {
 
 	probs[next] -= 1 // derivative of cross entropy with softmax
 	hiddenGrad := make([]float64, len(hidden))
-	for k := range t.out {
+	for k, row := range t.out {
+		step := rate * hidden[k]
 		for j, g := range probs {
-			hiddenGrad[k] += t.out[k][j] * g
-			t.out[k][j] -= rate * hidden[k] * g
+			hiddenGrad[k] += row[j] * g
+			row[j] -= step * g
 		}
 	}
 	for k := range hidden {

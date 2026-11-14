@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	dims   = 5 // activation functions per word, the video uses 2
-	epochs = 20
+	dims   = 10 // activation functions per word, the video uses 2
+	epochs = 1
 	rate   = 0.05
 	seed   = 1
 )

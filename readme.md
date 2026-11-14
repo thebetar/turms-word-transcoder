@@ -17,38 +17,38 @@ The code is in [`internal/transcoder`](internal/transcoder). Word2Vec adds Conti
 
 ## Data
 
-The corpora in `data/` are religious texts from the Etruscans and their Roman neighbours, in English:
+The corpora in `data/` are Homer's epics in Samuel Butler's public domain prose translations from Project Gutenberg, about 270,000 words:
 
-- [`liber-linteus.txt`](data/liber-linteus.txt): the [Liber Linteus](https://en.wikipedia.org/wiki/Liber_Linteus), the longest surviving Etruscan text, a ritual calendar of offerings to the gods. Etruscan is only partly understood, so this is the tentative translation of the passages that have one, from the notes on the [Wikipedia talk page](https://en.wikipedia.org/wiki/Talk:Liber_Linteus) ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)). Words nobody can translate yet stay in Etruscan.
-- [`tages.txt`](data/tages.txt): the myth of Tages, the child prophet who rose from a ploughed field and taught the Etruscans divination, from Cicero's _On Divination_ 2.50 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/2*.html)) and Ovid's _Metamorphoses_ 15 ([Garth, Dryden et al., 1727](https://en.wikisource.org/wiki/Metamorphoses_(tr._Garth,_Dryden,_et_al.)/Book_XV)).
-- [`roman-religion.txt`](data/roman-religion.txt): Roman prayers and rituals. Cato's farm offerings to Janus, Jupiter and Mars from _On Agriculture_ 132, 134 and 139-141 ([Hooper & Ash, 1934](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cato/De_Agricultura/H*.html)), Cicero on Etruscan divination from _On Divination_ 1.92-93 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/1*.html)), and Livy on how King Numa founded Roman religion from _History of Rome_ 1.19-21 ([Spillan, 1857](https://www.gutenberg.org/ebooks/19725)).
+- [`iliad.txt`](data/iliad.txt): the _Iliad_, the siege of Troy ([Gutenberg #2199](https://www.gutenberg.org/ebooks/2199)).
+- [`odyssey.txt`](data/odyssey.txt): the _Odyssey_, Ulysses' journey home ([Gutenberg #1727](https://www.gutenberg.org/ebooks/1727)).
+
+Butler uses the Roman names for the gods, so Zeus is Jove and Odysseus is Ulysses.
 
 ## Usage
 
 ```sh
 make build
 
+# Takes a few minutes
 ./bin/turms-word-transcoder train model.json data/*.txt
-# trained on 1060 words, loss 3.826
+# trained on 10133 words, loss 5.883
 
 # Word to numbers
-./bin/turms-word-transcoder encode model.json decorated
-# 1.474 -0.485 -1.287 1.831 0.125
+./bin/turms-word-transcoder encode model.json son
+# -1.111 0.622 0.583 -1.120 -0.141 -0.140 -0.834 -0.338 -0.296 -0.815
 
 # Numbers to the most likely next word
-./bin/turms-word-transcoder decode model.json 1.474 -0.485 -1.287 1.831 0.125
-# litter
+./bin/turms-word-transcoder decode model.json -1.111 0.622 0.583 -1.120 -0.141 -0.140 -0.834 -0.338 -0.296 -0.815
+# of
 
 # Words with similar numbers
-./bin/turms-word-transcoder similar model.json wine
-# pig          0.998
-# barley       0.975
-# around       0.970
-# arms         0.957
-# libation     0.957
+./bin/turms-word-transcoder similar model.json achilles
+# priam        0.977
+# agamemnon    0.965
+# patroclus    0.964
+# menelaus     0.957
+# hector       0.950
 ```
-
-With only about 3,800 words of text the results are noisy. Word2Vec is normally trained on millions of words.
 
 Useful make targets:
 
