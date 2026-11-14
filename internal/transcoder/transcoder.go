@@ -1,137 +1,170 @@
-// Package transcoder turns text into a list of word IDs and back again.
-//
-// It works in three steps:
-//  1. Tokenize: split the text into words and punctuation marks.
-//  2. Build: give every unique token in a corpus its own ID (its vocabulary).
-//  3. Encode/Decode: look tokens up in the vocabulary to go from text to IDs and back.
+// Package transcoder is the word embedding network from StatQuest's
+// "Word Embedding and Word2Vec, Clearly Explained!!!":
+// https://www.youtube.com/watch?v=viZrOnJclY0
 package transcoder
 
 import (
 	"encoding/json"
+	"math"
+	"math/rand"
 	"os"
-	"strings"
-	"unicode"
+	"sort"
 )
 
-// UnknownToken is used for words that are not in the vocabulary. It always has ID 0.
-const UnknownToken = "<unk>"
-
-// Transcoder holds a vocabulary in both directions.
 type Transcoder struct {
-	wordToID map[string]int
-	idToWord []string
+	vocab *Vocabulary
+	in    [][]float64 // in[word] are the weights to the activation functions: the word's embedding
+	out   [][]float64 // out[activation][word] are the weights to the outputs
 }
 
-// Tokenize lowercases the text and splits it into words and punctuation marks.
-// "Hello, world!" becomes ["hello", ",", "world", "!"].
-func Tokenize(text string) []string {
-	var tokens []string
-	var word strings.Builder
+// Train teaches the network to predict the next word in the corpus.
+func Train(corpus string, dims, epochs int, rate float64, seed int64) (*Transcoder, float64) {
+	tokens := Tokenize(corpus)
+	vocab := NewVocabulary(tokens)
+	rng := rand.New(rand.NewSource(seed))
+	t := &Transcoder{vocab, randomMatrix(rng, vocab.Size(), dims), randomMatrix(rng, dims, vocab.Size())}
 
-	flush := func() {
-		if word.Len() > 0 {
-			tokens = append(tokens, word.String())
-			word.Reset()
+	var loss float64
+	for e := 0; e < epochs; e++ {
+		loss = 0
+		for _, i := range rng.Perm(len(tokens) - 1) {
+			word, _ := vocab.ID(tokens[i])
+			next, _ := vocab.ID(tokens[i+1])
+			loss += t.step(word, next, rate)
+		}
+		loss /= float64(len(tokens) - 1)
+	}
+	return t, loss
+}
+
+// step does one round of backpropagation and returns the cross entropy loss.
+func (t *Transcoder) step(word, next int, rate float64) float64 {
+	hidden := t.in[word]
+	probs := t.softmax(hidden)
+	loss := -math.Log(probs[next])
+
+	probs[next] -= 1 // derivative of cross entropy with softmax
+	hiddenGrad := make([]float64, len(hidden))
+	for k := range t.out {
+		for j, g := range probs {
+			hiddenGrad[k] += t.out[k][j] * g
+			t.out[k][j] -= rate * hidden[k] * g
 		}
 	}
+	for k := range hidden {
+		hidden[k] -= rate * hiddenGrad[k]
+	}
+	return loss
+}
 
-	for _, r := range strings.ToLower(text) {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '\'':
-			word.WriteRune(r)
-		case unicode.IsSpace(r):
-			flush()
-		default:
-			flush()
-			tokens = append(tokens, string(r))
+func (t *Transcoder) softmax(hidden []float64) []float64 {
+	scores := make([]float64, t.vocab.Size())
+	for k, h := range hidden {
+		for j, w := range t.out[k] {
+			scores[j] += h * w
 		}
 	}
-	flush()
-
-	return tokens
-}
-
-// FromWords creates a transcoder from a list of words, where the position of a
-// word in the list is its ID. The unknown token is added at ID 0 when missing.
-func FromWords(words []string) *Transcoder {
-	t := &Transcoder{wordToID: map[string]int{}}
-	t.add(UnknownToken)
-	for _, w := range words {
-		t.add(w)
+	max, sum := scores[0], 0.0
+	for _, s := range scores {
+		max = math.Max(max, s)
 	}
-	return t
-}
-
-// Build creates a vocabulary from every unique token in the corpus, in the
-// order they first appear.
-func Build(corpus string) *Transcoder {
-	return FromWords(Tokenize(corpus))
-}
-
-func (t *Transcoder) add(word string) {
-	if _, ok := t.wordToID[word]; ok {
-		return
+	for j := range scores {
+		scores[j] = math.Exp(scores[j] - max)
+		sum += scores[j]
 	}
-	t.wordToID[word] = len(t.idToWord)
-	t.idToWord = append(t.idToWord, word)
-}
-
-// Size returns the number of tokens in the vocabulary, including the unknown token.
-func (t *Transcoder) Size() int {
-	return len(t.idToWord)
-}
-
-// Encode turns text into a list of IDs. Unknown words get ID 0.
-func (t *Transcoder) Encode(text string) []int {
-	tokens := Tokenize(text)
-	ids := make([]int, len(tokens))
-	for i, token := range tokens {
-		ids[i] = t.wordToID[token] // a missing key returns 0, the unknown token
+	for j := range scores {
+		scores[j] /= sum
 	}
-	return ids
+	return scores
 }
 
-// Decode turns a list of IDs back into text. IDs outside the vocabulary
-// become the unknown token. Punctuation is attached to the previous word.
-func (t *Transcoder) Decode(ids []int) string {
-	var out strings.Builder
-	for i, id := range ids {
-		word := UnknownToken
-		if id >= 0 && id < len(t.idToWord) {
-			word = t.idToWord[id]
+// Encode turns a word into its embedding.
+func (t *Transcoder) Encode(word string) ([]float64, bool) {
+	id, ok := t.vocab.ID(word)
+	if !ok {
+		return nil, false
+	}
+	return append([]float64(nil), t.in[id]...), true
+}
+
+// Decode turns an embedding into the most likely next word.
+func (t *Transcoder) Decode(embedding []float64) string {
+	probs := t.softmax(embedding)
+	best := 0
+	for j := range probs {
+		if probs[j] > probs[best] {
+			best = j
 		}
-		if i > 0 && !isPunctuation(word) {
-			out.WriteByte(' ')
-		}
-		out.WriteString(word)
 	}
-	return out.String()
+	return t.vocab.Word(best)
 }
 
-func isPunctuation(word string) bool {
-	r := []rune(word)
-	return len(r) == 1 && unicode.IsPunct(r[0])
+type Match struct {
+	Word       string
+	Similarity float64
 }
 
-// Save writes the vocabulary to a JSON file as a list of words, where the
-// position of a word is its ID.
+// Similar returns the n words with the most similar embeddings.
+func (t *Transcoder) Similar(word string, n int) ([]Match, bool) {
+	id, ok := t.vocab.ID(word)
+	if !ok {
+		return nil, false
+	}
+	var matches []Match
+	for j := range t.in {
+		if j != id {
+			matches = append(matches, Match{t.vocab.Word(j), cosine(t.in[id], t.in[j])})
+		}
+	}
+	sort.Slice(matches, func(a, b int) bool { return matches[a].Similarity > matches[b].Similarity })
+	return matches[:min(n, len(matches))], true
+}
+
+func (t *Transcoder) Size() int { return t.vocab.Size() }
+
+func cosine(a, b []float64) float64 {
+	var dot, na, nb float64
+	for i := range a {
+		dot += a[i] * b[i]
+		na += a[i] * a[i]
+		nb += b[i] * b[i]
+	}
+	return dot / math.Sqrt(na*nb)
+}
+
+func randomMatrix(rng *rand.Rand, rows, cols int) [][]float64 {
+	m := make([][]float64, rows)
+	for i := range m {
+		m[i] = make([]float64, cols)
+		for j := range m[i] {
+			m[i][j] = rng.Float64() - 0.5
+		}
+	}
+	return m
+}
+
+type file struct {
+	Words []string
+	In    [][]float64
+	Out   [][]float64
+}
+
 func (t *Transcoder) Save(path string) error {
-	data, err := json.MarshalIndent(t.idToWord, "", "  ")
+	data, err := json.Marshal(file{t.vocab.words, t.in, t.out})
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
 }
 
-// Load reads a vocabulary file written by Save.
 func Load(path string) (*Transcoder, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var words []string
-	if err := json.Unmarshal(data, &words); err != nil {
+	var f file
+	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, err
 	}
-	return FromWords(words), nil
+	return &Transcoder{NewVocabulary(f.Words), f.In, f.Out}, nil
 }

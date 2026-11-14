@@ -2,58 +2,56 @@
 
 The main goal of this project is to explore how a word encoder and decoder work and how to build one in Go, as simply as possible.
 
-The name `turms-word-transcoder` comes from Turms, the messenger of the gods in Etruscan mythology (https://en.wikipedia.org/wiki/Turms). A messenger takes a message, carries it to the other side and delivers it without changing what it means, which is exactly what an encoder and decoder do with text.
+The name `turms-word-transcoder` comes from Turms, the messenger of the gods in Etruscan mythology (https://en.wikipedia.org/wiki/Turms). A messenger takes a message, carries it to the other side and delivers it without changing what it means, which is what an encoder and decoder do with words.
 
 ## How it works
 
-Computers (and language models) work with numbers, not words. A word transcoder translates between the two in three steps:
+This follows StatQuest's [Word Embedding and Word2Vec, Clearly Explained!!!](https://www.youtube.com/watch?v=viZrOnJclY0), which is where I learned how this works.
 
-1. **Tokenize**: the text is lowercased and split into words and punctuation marks. `"Hello, world!"` becomes `["hello", ",", "world", "!"]`.
-2. **Build a vocabulary**: every unique token in a corpus (a text file to learn from) gets its own ID, in the order it first appears. ID `0` is reserved for `<unk>`, the unknown token.
-3. **Encode and decode**: encoding looks up the ID of every token, decoding looks up the token for every ID. Words that are not in the vocabulary are encoded as `0` and come back as `<unk>`.
+1. Every unique word in the corpus gets its own input and output in a small neural network.
+2. Each input is connected to a few activation functions. The weights on those connections are the numbers that represent the word, its **embedding**. Going from a word to its numbers is the **encoder**.
+3. The activation functions are connected to every output, and SoftMax turns the outputs into probabilities. Going from numbers back to the most likely word is the **decoder**.
+4. The network is trained with backpropagation to predict the next word. Words that are used in the same way end up with similar numbers.
 
-All of this lives in [`internal/transcoder/transcoder.go`](internal/transcoder/transcoder.go). The vocabulary is saved as a JSON list of words, where the position of a word is its ID.
+The code is in [`internal/transcoder`](internal/transcoder). Word2Vec adds Continuous Bag of Words, Skip-gram and Negative Sampling on top of this, which are left out to keep it simple.
 
 ## Data
 
-Fitting the name, the example corpora in `data/` are Etruscan texts in English. No Etruscan myths survive in the Etruscan language itself: what is left is mostly short inscriptions, and their religious books (the _Etrusca Disciplina_) are lost. So there are two corpora:
+The corpora in `data/` are religious texts from the Etruscans and their Roman neighbours, in English:
 
-- [`data/liber-linteus.txt`](data/liber-linteus.txt): the [Liber Linteus](https://en.wikipedia.org/wiki/Liber_Linteus), the longest surviving Etruscan text. It is a ritual calendar of offerings to the gods, written on linen that was later cut into strips to wrap an Egyptian mummy. Etruscan is still only partly understood, so no full translation exists. This file collects the tentative English translations of the passages that have one, taken from the column-by-column notes on the [Wikipedia talk page](https://en.wikipedia.org/wiki/Talk:Liber_Linteus) (based on L. B. van der Meer's 2007 edition, licensed [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)). The Etruscan glosses and uncertain alternatives were removed, and words nobody can translate yet, such as `zarfneθ` or `cletram`, stay in Etruscan.
-- [`data/tages.txt`](data/tages.txt): the myth of Tages, the child prophet who rose from a ploughed field and taught the Etruscans divination, as told by Roman writers in public domain English translations: Cicero, _On Divination_ 2.50 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/2*.html)) and Ovid, _Metamorphoses_ 15 ([Garth, Dryden et al., 1727](https://en.wikisource.org/wiki/Metamorphoses_(tr._Garth,_Dryden,_et_al.)/Book_XV)).
+- [`liber-linteus.txt`](data/liber-linteus.txt): the [Liber Linteus](https://en.wikipedia.org/wiki/Liber_Linteus), the longest surviving Etruscan text, a ritual calendar of offerings to the gods. Etruscan is only partly understood, so this is the tentative translation of the passages that have one, from the notes on the [Wikipedia talk page](https://en.wikipedia.org/wiki/Talk:Liber_Linteus) ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/)). Words nobody can translate yet stay in Etruscan.
+- [`tages.txt`](data/tages.txt): the myth of Tages, the child prophet who rose from a ploughed field and taught the Etruscans divination, from Cicero's _On Divination_ 2.50 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/2*.html)) and Ovid's _Metamorphoses_ 15 ([Garth, Dryden et al., 1727](https://en.wikisource.org/wiki/Metamorphoses_(tr._Garth,_Dryden,_et_al.)/Book_XV)).
+- [`roman-religion.txt`](data/roman-religion.txt): Roman prayers and rituals. Cato's farm offerings to Janus, Jupiter and Mars from _On Agriculture_ 132, 134 and 139-141 ([Hooper & Ash, 1934](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cato/De_Agricultura/H*.html)), Cicero on Etruscan divination from _On Divination_ 1.92-93 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/1*.html)), and Livy on how King Numa founded Roman religion from _History of Rome_ 1.19-21 ([Spillan, 1857](https://www.gutenberg.org/ebooks/19725)).
 
 ## Usage
 
 ```sh
 make build
 
-# Build a vocabulary from the Liber Linteus
-./bin/turms-word-transcoder build data/liber-linteus.txt linteus.json
-# saved 302 words to linteus.json
+./bin/turms-word-transcoder train model.json data/*.txt
+# trained on 1060 words, loss 3.826
 
-# Text to IDs
-./bin/turms-word-transcoder encode linteus.json "Pour a libation of new wine to Neptune."
-# 168 64 38 79 69 57 20 150 12
+# Word to numbers
+./bin/turms-word-transcoder encode model.json decorated
+# 1.474 -0.485 -1.287 1.831 0.125
 
-# IDs back to text
-./bin/turms-word-transcoder decode linteus.json 168 64 38 79 69 57 20 150 12
-# pour a libation of new wine to neptune.
+# Numbers to the most likely next word
+./bin/turms-word-transcoder decode model.json 1.474 -0.485 -1.287 1.831 0.125
+# litter
 
-# Build a vocabulary from the Tages myth and try words that are not in it
-./bin/turms-word-transcoder build data/tages.txt tages.json
-# saved 168 words to tages.json
-
-./bin/turms-word-transcoder encode tages.json "A boy sprang from the ploughed field and taught the Etruscans to read the gods."
-# 8 43 28 105 1 18 15 24 163 1 106 31 0 1 0 33
-
-./bin/turms-word-transcoder decode tages.json 8 43 28 105 1 18 15 24 163 1 106 31 0 1 0 33
-# a boy sprang from the ploughed field and taught the etruscans to <unk> the <unk>.
+# Words with similar numbers
+./bin/turms-word-transcoder similar model.json wine
+# pig          0.998
+# barley       0.975
+# around       0.970
+# arms         0.957
+# libation     0.957
 ```
 
-The unknown words show the main weakness of a word-level transcoder: `gods` is unknown even though `god` might be in a bigger corpus, because every form of a word needs its own ID. Subword tokenizers such as byte pair encoding split words into smaller pieces to solve this.
+With only about 3,800 words of text the results are noisy. Word2Vec is normally trained on millions of words.
 
 Useful make targets:
 
-- `make run ARGS="..."` — run the CLI without building
 - `make build` — build a binary into `bin/turms-word-transcoder`
 - `make test` — run unit tests
 - `make coverage` — run tests with a coverage report
