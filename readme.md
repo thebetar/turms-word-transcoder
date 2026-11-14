@@ -14,23 +14,42 @@ Computers (and language models) work with numbers, not words. A word transcoder 
 
 All of this lives in [`internal/transcoder/transcoder.go`](internal/transcoder/transcoder.go). The vocabulary is saved as a JSON list of words, where the position of a word is its ID.
 
+## Data
+
+Fitting the name, the example corpora in `data/` are Etruscan. No Etruscan myths survive in the Etruscan language itself: what is left is mostly short inscriptions, and their religious books (the _Etrusca Disciplina_) are lost. So there are two corpora:
+
+- [`data/liber-linteus.txt`](data/liber-linteus.txt): the [Liber Linteus](https://en.wikipedia.org/wiki/Liber_Linteus), the longest surviving Etruscan text. It is a ritual calendar of offerings to the gods, written on linen that was later cut into strips to wrap an Egyptian mummy. Etruscan can be read but is still largely untranslated, so the transcoder handles words nobody fully understands. The transliteration comes from the column-by-column excerpts on the [Wikipedia talk page](https://en.wikipedia.org/wiki/Talk:Liber_Linteus), with the interpuncts between words replaced by spaces and the editorial gap markers removed. It holds about 1,100 of the roughly 1,330 legible words.
+- [`data/tages.txt`](data/tages.txt): the myth of Tages, the child prophet who rose from a ploughed field and taught the Etruscans divination, as told by Roman writers in public domain English translations: Cicero, _On Divination_ 2.50 ([Falconer, 1923](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cicero/de_Divinatione/2*.html)) and Ovid, _Metamorphoses_ 15 ([Garth, Dryden et al., 1727](https://en.wikisource.org/wiki/Metamorphoses_(tr._Garth,_Dryden,_et_al.)/Book_XV)).
+
 ## Usage
 
 ```sh
 make build
 
-# Build a vocabulary from the example corpus
-./bin/turms-word-transcoder build data/corpus.txt vocab.json
-# saved 43 words to vocab.json
+# Build a vocabulary from the Liber Linteus
+./bin/turms-word-transcoder build data/liber-linteus.txt etruscan.json
+# saved 522 words to etruscan.json
 
-# Text to IDs ("hermes" is not in the corpus, so it becomes 0)
-./bin/turms-word-transcoder encode vocab.json "Hermes carried the message to the gods."
-# 0 12 3 24 22 3 6 10
+# Text to IDs: the repeated lament from column 7
+./bin/turms-word-transcoder encode etruscan.json "male ceia hia etnam ciz vacl aisvale"
+# 84 200 201 61 202 73 204
 
 # IDs back to text
-./bin/turms-word-transcoder decode vocab.json 0 12 3 24 22 3 6 10
-# <unk> carried the message to the gods.
+./bin/turms-word-transcoder decode etruscan.json 84 200 201 61 202 73 204
+# male ceia hia etnam ciz vacl aisvale
+
+# Build a vocabulary from the Tages myth and try words that are not in it
+./bin/turms-word-transcoder build data/tages.txt tages.json
+# saved 168 words to tages.json
+
+./bin/turms-word-transcoder encode tages.json "A boy sprang from the ploughed field and taught the Etruscans to read the gods."
+# 8 43 28 105 1 18 15 24 163 1 106 31 0 1 0 33
+
+./bin/turms-word-transcoder decode tages.json 8 43 28 105 1 18 15 24 163 1 106 31 0 1 0 33
+# a boy sprang from the ploughed field and taught the etruscans to <unk> the <unk>.
 ```
+
+The unknown words show the main weakness of a word-level transcoder: `gods` is unknown even though `god` might be in a bigger corpus, because every form of a word needs its own ID. Etruscan makes this even clearer, as it adds endings to words: the Liber Linteus has both `tinś` and `tinśi`, which get two unrelated IDs. Subword tokenizers such as byte pair encoding split words into smaller pieces to solve this.
 
 Useful make targets:
 

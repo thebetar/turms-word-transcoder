@@ -1,4 +1,4 @@
 bin/
 coverage.out
 *.out
-vocab.json
+*.json

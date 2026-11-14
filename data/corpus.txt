@@ -1,4 +1,0 @@
-Turms was the messenger of the gods in Etruscan mythology.
-He carried messages between the gods and the people, and between the living and the dead.
-A messenger has to take a message, carry it to the other side, and deliver it without changing what it means.
-An encoder turns words into numbers, and a decoder turns those numbers back into words.
